@@ -208,7 +208,7 @@ class Program
             var request = new
             {
                 model = "qwen2.5vl:3b",
-                prompt = $"Look at this {regionName} image. What is the main thing you see?\n\nAnswer quickly in this format:\nTYPE: [webpage/app/document/photo]\nMAIN CONTENT: [what is the most important thing]\nCONFIDENCE: [High/Medium/Low]",
+                prompt = $"Look at this {regionName} image. What is the main thing you see? Answer in one sentence.",
                 images = new[] { base64Image },
                 stream = false
             };
@@ -222,27 +222,21 @@ class Program
             if (response.IsSuccessStatusCode)
             {
                 var result = JsonConvert.DeserializeObject<OllamaResponse>(responseText);
-                var analysis = ParseMainContentAnalysis(result?.Response ?? "");
                 
-                Console.WriteLine($"\n🎯 Main Content Analysis Results:");
-                Console.WriteLine($"═══════════════════════════════════");
-                Console.WriteLine($"Content Type: {analysis.ContentType}");
-                Console.WriteLine($"Main Content: {analysis.Description}");
-                Console.WriteLine($"Confidence: {analysis.ConfidenceScore:P0}");
-                Console.WriteLine($"═══════════════════════════════════");
+                Console.WriteLine($"\n🎯 Main Content: {result?.Response?.Trim()}");
 
-                return analysis;
+                return new MainContentAnalysis { Description = result?.Response?.Trim() ?? "No response" };
             }
             else
             {
                 Console.WriteLine($"❌ Main content analysis failed: {response.StatusCode}");
-                return new MainContentAnalysis { ContentType = "Unknown", Description = "Analysis failed" };
+                return new MainContentAnalysis { Description = "Analysis failed" };
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Main content analysis error: {ex.Message}");
-            return new MainContentAnalysis { ContentType = "Error", Description = ex.Message };
+            return new MainContentAnalysis { Description = ex.Message };
         }
     }
 
