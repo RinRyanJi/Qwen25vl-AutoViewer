@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OllamaTest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6d5298d57fb52aec97e5697828794b6a391c8c9a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5d4e41d913ffd41038c5bc772227242a0a64b991")]
 [assembly: System.Reflection.AssemblyProductAttribute("OllamaTest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OllamaTest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

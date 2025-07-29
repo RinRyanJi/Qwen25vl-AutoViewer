@@ -210,7 +210,13 @@ class Program
                 model = "qwen2.5vl:3b",
                 prompt = $"Look at this {regionName} image. What is the main thing you see? Answer in one sentence.",
                 images = new[] { base64Image },
-                stream = false
+                stream = false,
+                options = new
+                {
+                    temperature = 0.1,
+                    top_p = 0.9,
+                    num_predict = 50
+                }
             };
 
             var json = JsonConvert.SerializeObject(request);
@@ -912,7 +918,13 @@ class Program
                         model = "qwen2.5vl:3b",
                         prompt = "Find blue buttons or clickable blue elements.\n\nFor each blue button you find, answer:\nBUTTON 1:\nText: \"button text\"\nPosition: (x, y)\n\nBUTTON 2:\nText: \"button text\"\nPosition: (x, y)",
                         images = new[] { base64Image },
-                        stream = false
+                        stream = false,
+                        options = new
+                        {
+                            temperature = 0.1,
+                            top_p = 0.9,
+                            num_predict = 200
+                        }
                     };
 
                     var json = JsonConvert.SerializeObject(request);
