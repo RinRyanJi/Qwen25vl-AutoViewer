@@ -755,16 +755,19 @@ class Program
             {
                 Console.WriteLine($"3. 📋 Use saved region ({savedRegions.Count} available)");
                 Console.WriteLine("4. 🎯 Main content analysis (analyze image focus)");
-                Console.WriteLine("5. Load image file");
-                Console.WriteLine("6. Skip image test");
-                Console.Write("Enter your choice (1-6): ");
+                Console.WriteLine("5. 🚀 Quick Combined Test (saved region + button detection + auto-click)");
+                Console.WriteLine("6. 🖱️  Test Mouse Control (move and click test)");
+                Console.WriteLine("7. Load image file");
+                Console.WriteLine("8. Skip image test");
+                Console.Write("Enter your choice (1-8): ");
             }
             else
             {
                 Console.WriteLine("3. 🎯 Main content analysis (analyze image focus)");
-                Console.WriteLine("4. Load image file");
-                Console.WriteLine("5. Skip image test");
-                Console.Write("Enter your choice (1-5): ");
+                Console.WriteLine("4. 🖱️  Test Mouse Control (move and click test)");
+                Console.WriteLine("5. Load image file");
+                Console.WriteLine("6. Skip image test");
+                Console.Write("Enter your choice (1-6): ");
             }
 
             try
@@ -787,9 +790,15 @@ class Program
                             await TestMainContentAnalysis();
                             break;
                         case "5":
-                            await TestImageAnalysisWithFile(args);
+                            await TestQuickCombinedTest();
                             break;
                         case "6":
+                            await TestMouseControl();
+                            break;
+                        case "7":
+                            await TestImageAnalysisWithFile(args);
+                            break;
+                        case "8":
                         default:
                             Console.WriteLine("Skipping image test.");
                             break;
@@ -809,9 +818,12 @@ class Program
                             await TestMainContentAnalysis();
                             break;
                         case "4":
-                            await TestImageAnalysisWithFile(args);
+                            await TestMouseControl();
                             break;
                         case "5":
+                            await TestImageAnalysisWithFile(args);
+                            break;
+                        case "6":
                         default:
                             Console.WriteLine("Skipping image test.");
                             break;
@@ -1275,6 +1287,574 @@ class Program
     }
 
     /// <summary>
+    /// Quick combined test: uses saved region, finds buttons, analyzes main content, and provides auto-click
+    /// </summary>
+    static async Task TestQuickCombinedTest()
+    {
+        try
+        {
+            Console.WriteLine("🚀 Quick Combined Test");
+            Console.WriteLine("═══════════════════════");
+            Console.WriteLine("This test will:");
+            Console.WriteLine("1. Let you select a saved region");
+            Console.WriteLine("2. Capture and analyze the region for blue buttons");
+            Console.WriteLine("3. Analyze main content");
+            Console.WriteLine("4. Show results and ask for confirmation");
+            Console.WriteLine("5. Auto-click the button if you confirm");
+            Console.WriteLine();
+
+            if (savedRegions.Count == 0)
+            {
+                Console.WriteLine("❌ No saved regions available. Please create a saved region first.");
+                return;
+            }
+
+            // Step 1: Select saved region
+            Console.WriteLine($"📋 Available saved regions ({savedRegions.Count}):");
+            for (int i = 0; i < savedRegions.Count; i++)
+            {
+                var region = savedRegions[i];
+                Console.WriteLine($"{i + 1}. {region}");
+            }
+
+            Console.Write($"Select a region (1-{savedRegions.Count}): ");
+            if (!int.TryParse(Console.ReadLine(), out int choice) || choice < 1 || choice > savedRegions.Count)
+            {
+                Console.WriteLine("❌ Invalid selection.");
+                return;
+            }
+
+            var selectedRegion = savedRegions[choice - 1];
+            Console.WriteLine($"✅ Using region: {selectedRegion.Name}");
+            Console.WriteLine($"📐 Location: {selectedRegion.X}, {selectedRegion.Y} | Size: {selectedRegion.Width}×{selectedRegion.Height}");
+            
+            // Check if region is from different monitor setup
+            bool needsAdjustment = IsRegionFromDifferentMonitorSetup(selectedRegion);
+            if (needsAdjustment)
+            {
+                var screenBounds = GetScreenBounds();
+                Console.WriteLine($"⚠️  WARNING: This region appears to be from a different monitor setup!");
+                Console.WriteLine($"📐 Region extends to: {selectedRegion.X + selectedRegion.Width}×{selectedRegion.Y + selectedRegion.Height}");
+                Console.WriteLine($"📐 Current screen: {screenBounds.Width}×{screenBounds.Height}");
+                Console.WriteLine($"🔧 Coordinates will be automatically adjusted to fit your current screen.");
+            }
+            Console.WriteLine();
+
+            // Step 2: Capture and analyze region
+            Console.WriteLine("📸 Capturing region...");
+            
+            // Adjust region capture if needed for current screen
+            var captureRegion = selectedRegion;
+            if (needsAdjustment)
+            {
+                var screenBounds = GetScreenBounds();
+                // Scale the region to fit current screen proportionally
+                double scaleX = (double)screenBounds.Width / (selectedRegion.X + selectedRegion.Width);
+                double scaleY = (double)screenBounds.Height / (selectedRegion.Y + selectedRegion.Height);
+                double scale = Math.Min(scaleX, scaleY);
+                
+                int newX = (int)(selectedRegion.X * scale);
+                int newY = (int)(selectedRegion.Y * scale);
+                int newWidth = Math.Min((int)(selectedRegion.Width * scale), screenBounds.Width - newX);
+                int newHeight = Math.Min((int)(selectedRegion.Height * scale), screenBounds.Height - newY);
+                
+                // Ensure we don't go out of bounds
+                newX = Math.Max(0, Math.Min(newX, screenBounds.Width - newWidth));
+                newY = Math.Max(0, Math.Min(newY, screenBounds.Height - newHeight));
+                
+                Console.WriteLine($"🔧 Adjusted capture region: {newX}, {newY} | Size: {newWidth}×{newHeight}");
+                
+                captureRegion = new SavedRegion("temp", new Rectangle(newX, newY, newWidth, newHeight));
+            }
+            
+            using (Bitmap regionScreenshot = CaptureRegion(captureRegion.X, captureRegion.Y, captureRegion.Width, captureRegion.Height))
+            {
+                string tempPath = Path.Combine(Path.GetTempPath(), $"quick_test_{selectedRegion.Name}_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+                regionScreenshot.Save(tempPath, ImageFormat.Png);
+
+                using (var ms = new MemoryStream())
+                {
+                    regionScreenshot.Save(ms, ImageFormat.Png);
+                    string base64Image = Convert.ToBase64String(ms.ToArray());
+
+                    // Step 3: Analyze for blue buttons
+                    Console.WriteLine("🔍 Analyzing for blue buttons...");
+                    var buttons = await AnalyzeForButtons(base64Image, selectedRegion.Name, captureRegion.X, captureRegion.Y, selectedRegion);
+
+                    // Step 4: Analyze main content
+                    Console.WriteLine("🎯 Analyzing main content...");
+                    var mainContent = await AnalyzeMainContent(base64Image, selectedRegion.Name);
+
+                    // Step 5: Show combined results
+                    Console.WriteLine("\n🎯 COMBINED ANALYSIS RESULTS");
+                    Console.WriteLine("═══════════════════════════════════");
+                    Console.WriteLine($"📍 Region: {selectedRegion.Name}");
+                    Console.WriteLine($"🎯 Main Content: {mainContent.Description}");
+                    
+                    if (buttons.Count > 0)
+                    {
+                        Console.WriteLine($"🔵 Found {buttons.Count} blue button(s):");
+                        for (int i = 0; i < buttons.Count; i++)
+                        {
+                            var btn = buttons[i];
+                            Console.WriteLine($"   {i + 1}. {btn}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("❌ No blue buttons detected");
+                    }
+                    Console.WriteLine("═══════════════════════════════════");
+
+                    // Step 6: Ask for confirmation and auto-click
+                    if (buttons.Count > 0)
+                    {
+                        Console.WriteLine("\n🖱️  AUTO-CLICK CONFIRMATION");
+                        Console.WriteLine("Do you want to automatically click on a detected button?");
+                        Console.Write("Type 'YES' to confirm auto-click, or anything else to cancel: ");
+                        
+                        var confirmation = Console.ReadLine()?.Trim().ToUpper();
+                        if (confirmation == "YES")
+                        {
+                            // Select button to click
+                            if (buttons.Count == 1)
+                            {
+                                var button = buttons[0];
+                                Console.WriteLine($"🎯 Auto-clicking on: '{button.Text}' at screen position ({button.ScreenX}, {button.ScreenY})");
+                                await PerformAutoClick(button);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Multiple buttons found. Select which one to click:");
+                                for (int i = 0; i < buttons.Count; i++)
+                                {
+                                    Console.WriteLine($"{i + 1}. {buttons[i].Text}");
+                                }
+                                Console.Write($"Select button (1-{buttons.Count}): ");
+                                
+                                if (int.TryParse(Console.ReadLine(), out int btnChoice) && btnChoice >= 1 && btnChoice <= buttons.Count)
+                                {
+                                    var button = buttons[btnChoice - 1];
+                                    Console.WriteLine($"🎯 Auto-clicking on: '{button.Text}' at screen position ({button.ScreenX}, {button.ScreenY})");
+                                    await PerformAutoClick(button);
+                                }
+                                else
+                                {
+                                    Console.WriteLine("❌ Invalid button selection. Auto-click cancelled.");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Auto-click cancelled by user.");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("⚠️ No buttons available for auto-click.");
+                    }
+
+                    Console.WriteLine($"\n📁 Screenshot saved: {tempPath}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Quick combined test error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Analyzes image for buttons and returns parsed button list
+    /// </summary>
+    static async Task<List<BlueButton>> AnalyzeForButtons(string base64Image, string regionName, int regionX, int regionY, SavedRegion? originalRegion = null)
+    {
+        try
+        {
+            var request = new
+            {
+                model = "qwen2.5vl:3b",
+                prompt = "Find blue buttons or clickable blue elements.\n\nFor each blue button you find, answer:\nBUTTON 1:\nText: \"button text\"\nPosition: (x, y)\n\nBUTTON 2:\nText: \"button text\"\nPosition: (x, y)",
+                images = new[] { base64Image },
+                stream = false,
+                options = new
+                {
+                    temperature = 0.1,
+                    top_p = 0.9,
+                    num_predict = 200
+                }
+            };
+
+            var json = JsonConvert.SerializeObject(request);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await httpClient.PostAsync(OLLAMA_URL, content);
+            var responseText = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var lines = responseText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                OllamaResponse? result = null;
+                
+                foreach (var line in lines)
+                {
+                    try
+                    {
+                        var tempResult = JsonConvert.DeserializeObject<OllamaResponse>(line);
+                        if (tempResult?.Done == true && !string.IsNullOrEmpty(tempResult.Response))
+                        {
+                            result = tempResult;
+                            break;
+                        }
+                        else if (tempResult != null && !string.IsNullOrEmpty(tempResult.Response))
+                        {
+                            result = tempResult;
+                        }
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+
+                if (result != null && !string.IsNullOrEmpty(result.Response))
+                {
+                    return ParseButtonsFromResponse(result.Response, regionX, regionY, originalRegion);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"❌ Button analysis failed: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Button analysis error: {ex.Message}");
+        }
+
+        return new List<BlueButton>();
+    }
+
+    /// <summary>
+    /// Parses button information from AI response and returns list of buttons
+    /// </summary>
+    static List<BlueButton> ParseButtonsFromResponse(string aiResponse, int regionX = 0, int regionY = 0, SavedRegion? originalRegion = null)
+    {
+        var buttons = new List<BlueButton>();
+        var lines = aiResponse.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        BlueButton? currentButton = null;
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            var lowerLine = trimmedLine.ToLower();
+
+            // Check for button start markers
+            if (lowerLine.StartsWith("button ") && lowerLine.Contains(":"))
+            {
+                if (currentButton != null && !string.IsNullOrEmpty(currentButton.Text))
+                {
+                    buttons.Add(currentButton);
+                }
+                currentButton = new BlueButton();
+                continue;
+            }
+
+            // Parse text field
+            if (lowerLine.StartsWith("text:"))
+            {
+                if (currentButton == null) currentButton = new BlueButton();
+
+                var textMatch = System.Text.RegularExpressions.Regex.Match(trimmedLine, @"[""']([^""']+)[""']");
+                if (textMatch.Success)
+                {
+                    currentButton.Text = textMatch.Groups[1].Value;
+                }
+                else
+                {
+                    var colonIndex = trimmedLine.IndexOf(':');
+                    if (colonIndex >= 0 && colonIndex < trimmedLine.Length - 1)
+                    {
+                        currentButton.Text = trimmedLine.Substring(colonIndex + 1).Trim().Trim('"', '\'');
+                    }
+                }
+                continue;
+            }
+
+            // Parse position field
+            if (lowerLine.StartsWith("position:"))
+            {
+                if (currentButton == null) currentButton = new BlueButton();
+
+                var coordMatch = System.Text.RegularExpressions.Regex.Match(trimmedLine, @"\((\d+),\s*(\d+)\)");
+                if (coordMatch.Success)
+                {
+                    if (int.TryParse(coordMatch.Groups[1].Value, out int x) &&
+                        int.TryParse(coordMatch.Groups[2].Value, out int y))
+                    {
+                        currentButton.CenterX = x;
+                        currentButton.CenterY = y;
+                        var screenPos = ConvertToScreenCoordinates(x, y, regionX, regionY);
+                        
+                        // Apply coordinate adjustment if region is from different monitor setup
+                        if (originalRegion != null && IsRegionFromDifferentMonitorSetup(originalRegion))
+                        {
+                            var originalRegionRect = new Rectangle(originalRegion.X, originalRegion.Y, originalRegion.Width, originalRegion.Height);
+                            screenPos = AdjustCoordinatesToScreen(screenPos, originalRegionRect);
+                        }
+                        
+                        currentButton.ScreenX = screenPos.X;
+                        currentButton.ScreenY = screenPos.Y;
+                    }
+                }
+                continue;
+            }
+        }
+
+        // Add the last button if it exists
+        if (currentButton != null && !string.IsNullOrEmpty(currentButton.Text))
+        {
+            buttons.Add(currentButton);
+        }
+
+        return buttons;
+    }
+
+    /// <summary>
+    /// Performs the auto-click with countdown and user feedback
+    /// </summary>
+    static async Task PerformAutoClick(BlueButton button)
+    {
+        try
+        {
+            Console.WriteLine($"\n⚠️  ABOUT TO CLICK: '{button.Text}'");
+            Console.WriteLine($"📍 Target Position: ({button.ScreenX}, {button.ScreenY})");
+            
+            // Show current mouse position
+            var currentPos = GetCursorPosition();
+            Console.WriteLine($"🖱️  Current Mouse Position: ({currentPos.X}, {currentPos.Y})");
+            
+            // Show screen info for verification
+            var screenBounds = GetScreenBounds();
+            Console.WriteLine($"📐 Current screen size: {screenBounds.Width}×{screenBounds.Height}");
+            
+            Console.WriteLine("🕐 Starting countdown...");
+
+            // 5-second countdown
+            for (int i = 5; i > 0; i--)
+            {
+                Console.WriteLine($"Clicking in {i} seconds... (Press Ctrl+C to cancel)");
+                await Task.Delay(1000);
+            }
+
+            Console.WriteLine("🖱️  CLICKING NOW!");
+            
+            // Move mouse to position and click
+            bool moveSuccess = MoveMouse(button.ScreenX, button.ScreenY);
+            
+            if (moveSuccess)
+            {
+                await Task.Delay(300); // Increased delay to ensure mouse moved
+                
+                // Verify mouse position
+                var newPos = GetCursorPosition();
+                Console.WriteLine($"🔍 Verification - Mouse is now at: ({newPos.X}, {newPos.Y})");
+                
+                if (Math.Abs(newPos.X - button.ScreenX) > 5 || Math.Abs(newPos.Y - button.ScreenY) > 5)
+                {
+                    Console.WriteLine($"⚠️  WARNING: Mouse position mismatch! Expected ({button.ScreenX}, {button.ScreenY}), got ({newPos.X}, {newPos.Y})");
+                }
+                
+                ClickMouse();
+                Console.WriteLine("✅ Auto-click completed!");
+                Console.WriteLine($"🎯 Clicked on '{button.Text}' at ({button.ScreenX}, {button.ScreenY})");
+            }
+            else
+            {
+                Console.WriteLine("❌ Failed to move mouse to target position!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Auto-click error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Tests mouse control functionality with diagnostics
+    /// </summary>
+    static async Task TestMouseControl()
+    {
+        try
+        {
+            Console.WriteLine("🖱️  Mouse Control Test");
+            Console.WriteLine("═══════════════════════");
+            Console.WriteLine("This test will help diagnose mouse movement and clicking issues.");
+            Console.WriteLine();
+
+            // Get current mouse position
+            var currentPos = GetCursorPosition();
+            Console.WriteLine($"📍 Current mouse position: ({currentPos.X}, {currentPos.Y})");
+
+            // Get screen bounds
+            var screenBounds = GetScreenBounds();
+            Console.WriteLine($"📐 Screen size: {screenBounds.Width}×{screenBounds.Height}");
+            Console.WriteLine();
+
+            Console.WriteLine("Test options:");
+            Console.WriteLine("1. Move mouse to center of screen");
+            Console.WriteLine("2. Move mouse to specific coordinates");
+            Console.WriteLine("3. Click at current position");
+            Console.WriteLine("4. Move and click test");
+            Console.WriteLine("5. Cancel");
+            Console.Write("Enter your choice (1-5): ");
+
+            var choice = Console.ReadLine()?.Trim();
+
+            switch (choice)
+            {
+                case "1":
+                    // Test moving to center
+                    int centerX = screenBounds.Width / 2;
+                    int centerY = screenBounds.Height / 2;
+                    Console.WriteLine($"\n🎯 Moving mouse to screen center: ({centerX}, {centerY})");
+                    
+                    bool moveResult = MoveMouse(centerX, centerY);
+                    await Task.Delay(500);
+                    
+                    var verifyPos = GetCursorPosition();
+                    Console.WriteLine($"🔍 Verification: Mouse is now at ({verifyPos.X}, {verifyPos.Y})");
+                    
+                    if (moveResult && Math.Abs(verifyPos.X - centerX) <= 2 && Math.Abs(verifyPos.Y - centerY) <= 2)
+                    {
+                        Console.WriteLine("✅ Mouse movement test PASSED!");
+                    }
+                    else
+                    {
+                        Console.WriteLine("❌ Mouse movement test FAILED!");
+                    }
+                    break;
+
+                case "2":
+                    // Test moving to custom coordinates
+                    Console.Write("Enter X coordinate: ");
+                    if (int.TryParse(Console.ReadLine(), out int targetX))
+                    {
+                        Console.Write("Enter Y coordinate: ");
+                        if (int.TryParse(Console.ReadLine(), out int targetY))
+                        {
+                            Console.WriteLine($"\n🎯 Moving mouse to: ({targetX}, {targetY})");
+                            bool customMoveResult = MoveMouse(targetX, targetY);
+                            await Task.Delay(500);
+                            
+                            var customVerifyPos = GetCursorPosition();
+                            Console.WriteLine($"🔍 Verification: Mouse is now at ({customVerifyPos.X}, {customVerifyPos.Y})");
+                            
+                            if (customMoveResult && Math.Abs(customVerifyPos.X - targetX) <= 2 && Math.Abs(customVerifyPos.Y - targetY) <= 2)
+                            {
+                                Console.WriteLine("✅ Custom movement test PASSED!");
+                            }
+                            else
+                            {
+                                Console.WriteLine("❌ Custom movement test FAILED!");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("❌ Invalid Y coordinate.");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("❌ Invalid X coordinate.");
+                    }
+                    break;
+
+                case "3":
+                    // Test clicking at current position
+                    var clickPos = GetCursorPosition();
+                    Console.WriteLine($"\n🖱️  Testing click at current position: ({clickPos.X}, {clickPos.Y})");
+                    Console.WriteLine("⚠️  WARNING: This will perform an actual click!");
+                    Console.Write("Continue? (y/n): ");
+                    
+                    if (Console.ReadLine()?.ToLower() == "y")
+                    {
+                        Console.WriteLine("Clicking in 3 seconds...");
+                        for (int i = 3; i > 0; i--)
+                        {
+                            Console.WriteLine($"Clicking in {i}...");
+                            await Task.Delay(1000);
+                        }
+                        ClickMouse();
+                        Console.WriteLine("✅ Click test completed!");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Click test cancelled.");
+                    }
+                    break;
+
+                case "4":
+                    // Full move and click test
+                    Console.Write("Enter X coordinate to move and click: ");
+                    if (int.TryParse(Console.ReadLine(), out int moveClickX))
+                    {
+                        Console.Write("Enter Y coordinate to move and click: ");
+                        if (int.TryParse(Console.ReadLine(), out int moveClickY))
+                        {
+                            Console.WriteLine($"\n🎯 Will move to ({moveClickX}, {moveClickY}) and click");
+                            Console.WriteLine("⚠️  WARNING: This will perform an actual click!");
+                            Console.Write("Continue? (y/n): ");
+                            
+                            if (Console.ReadLine()?.ToLower() == "y")
+                            {
+                                Console.WriteLine("Starting move and click test in 3 seconds...");
+                                for (int i = 3; i > 0; i--)
+                                {
+                                    Console.WriteLine($"Starting in {i}...");
+                                    await Task.Delay(1000);
+                                }
+                                
+                                // Create a test button for the auto-click function
+                                var testButton = new BlueButton
+                                {
+                                    Text = "Test Button",
+                                    ScreenX = moveClickX,
+                                    ScreenY = moveClickY
+                                };
+                                
+                                await PerformAutoClick(testButton);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Move and click test cancelled.");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("❌ Invalid Y coordinate.");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("❌ Invalid X coordinate.");
+                    }
+                    break;
+
+                case "5":
+                default:
+                    Console.WriteLine("Mouse control test cancelled.");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Mouse control test error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Shows saved regions and allows user to select one
     /// </summary>
     static async Task TestSavedRegionSelection()
@@ -1531,7 +2111,17 @@ class Program
     /// </summary>
     static bool MoveMouse(int x, int y)
     {
-        return SetCursorPos(x, y);
+        Console.WriteLine($"🖱️  Moving mouse to ({x}, {y})...");
+        bool result = SetCursorPos(x, y);
+        if (result)
+        {
+            Console.WriteLine($"✅ Mouse moved to ({x}, {y})");
+        }
+        else
+        {
+            Console.WriteLine($"❌ Failed to move mouse to ({x}, {y})");
+        }
+        return result;
     }
 
     /// <summary>
@@ -1539,10 +2129,13 @@ class Program
     /// </summary>
     static void ClickMouse()
     {
+        Console.WriteLine("🖱️  Performing left click...");
         mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
         Thread.Sleep(50); // Small delay between down and up
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+        Console.WriteLine("✅ Click completed");
     }
+
 
     /// <summary>
     /// Moves mouse to coordinates and clicks
@@ -1560,6 +2153,52 @@ class Program
     static Point ConvertToScreenCoordinates(int imageX, int imageY, int regionX, int regionY)
     {
         return new Point(regionX + imageX, regionY + imageY);
+    }
+
+    /// <summary>
+    /// Adjusts coordinates to fit within current screen bounds
+    /// </summary>
+    static Point AdjustCoordinatesToScreen(Point originalPoint, Rectangle originalRegion)
+    {
+        var screenBounds = GetScreenBounds();
+        
+        // If coordinates are within screen bounds, return as-is
+        if (originalPoint.X >= 0 && originalPoint.Y >= 0 && 
+            originalPoint.X <= screenBounds.Width && originalPoint.Y <= screenBounds.Height)
+        {
+            return originalPoint;
+        }
+
+        Console.WriteLine($"🔧 Auto-adjusting coordinates from multi-monitor setup...");
+        Console.WriteLine($"📐 Original screen bounds: {originalRegion.X + originalRegion.Width}×{originalRegion.Y + originalRegion.Height}");
+        Console.WriteLine($"📐 Current screen bounds: {screenBounds.Width}×{screenBounds.Height}");
+
+        // Calculate the relative position within the original region
+        double relativeX = (double)(originalPoint.X - originalRegion.X) / originalRegion.Width;
+        double relativeY = (double)(originalPoint.Y - originalRegion.Y) / originalRegion.Height;
+
+        // Scale to fit current screen proportionally
+        int adjustedX = Math.Max(0, Math.Min(screenBounds.Width - 1, 
+            (int)(relativeX * screenBounds.Width)));
+        int adjustedY = Math.Max(0, Math.Min(screenBounds.Height - 1, 
+            (int)(relativeY * screenBounds.Height)));
+
+        var adjustedPoint = new Point(adjustedX, adjustedY);
+        
+        Console.WriteLine($"🎯 Adjusted coordinates: ({originalPoint.X}, {originalPoint.Y}) → ({adjustedPoint.X}, {adjustedPoint.Y})");
+        
+        return adjustedPoint;
+    }
+
+    /// <summary>
+    /// Checks if a saved region is from a different monitor setup
+    /// </summary>
+    static bool IsRegionFromDifferentMonitorSetup(SavedRegion region)
+    {
+        var screenBounds = GetScreenBounds();
+        return region.X >= screenBounds.Width || region.Y >= screenBounds.Height ||
+               (region.X + region.Width) > screenBounds.Width || 
+               (region.Y + region.Height) > screenBounds.Height;
     }
 
     /// <summary>
