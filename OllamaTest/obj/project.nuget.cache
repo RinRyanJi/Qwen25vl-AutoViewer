@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "fB4KNIKVolw=",
+  "success": true,
+  "projectFilePath": "D:\\AiLab\\Qwen25vl\\OllamaTest\\OllamaTest.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\caros\\.nuget\\packages\\microsoft.win32.systemevents\\9.0.7\\microsoft.win32.systemevents.9.0.7.nupkg.sha512",
+    "C:\\Users\\caros\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
+    "C:\\Users\\caros\\.nuget\\packages\\system.drawing.common\\9.0.7\\system.drawing.common.9.0.7.nupkg.sha512"
+  ],
+  "logs": []
+}

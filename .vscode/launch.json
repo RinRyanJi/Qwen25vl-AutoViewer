@@ -1,0 +1,92 @@
+{
+    "version": "0.2.0",
+    "inputs": [
+        {
+            "id": "imagePath",
+            "description": "Enter the path to an image file for testing",
+            "default": "C:\\Users\\caros\\Desktop\\test.png",
+            "type": "promptString"
+        }
+    ],
+    "configurations": [
+        {
+            "name": "Debug OllamaTest",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-ollamatest",
+            "program": "${workspaceFolder}/OllamaTest/bin/Debug/net9.0/OllamaTest.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/OllamaTest",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "justMyCode": true,
+            "requireExactSource": true,
+            "enableStepFiltering": true,
+            "logging": {
+                "exceptions": true,
+                "moduleLoad": false,
+                "programOutput": true,
+                "engineLogging": false,
+                "trace": false,
+                "traceResponse": false
+            },
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Run OllamaTest (No Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-ollamatest",
+            "program": "${workspaceFolder}/OllamaTest/bin/Debug/net9.0/OllamaTest.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/OllamaTest",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "justMyCode": false,
+            "enableStepFiltering": false,
+            "logging": {
+                "exceptions": false,
+                "moduleLoad": false,
+                "programOutput": true,
+                "engineLogging": false
+            },
+            "env": {
+                "DOTNET_ENVIRONMENT": "Production"
+            }
+        },
+        {
+            "name": "Debug OllamaTest with Image",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-ollamatest",
+            "program": "${workspaceFolder}/OllamaTest/bin/Debug/net9.0/OllamaTest.dll",
+            "args": ["${input:imagePath}"],
+            "cwd": "${workspaceFolder}/OllamaTest",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "justMyCode": true,
+            "requireExactSource": true,
+            "enableStepFiltering": true,
+            "logging": {
+                "exceptions": true,
+                "moduleLoad": false,
+                "programOutput": true,
+                "engineLogging": false,
+                "trace": false,
+                "traceResponse": false
+            },
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Attach to Process",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}",
+            "justMyCode": true
+        }
+    ]
+}

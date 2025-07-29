@@ -1,0 +1,17 @@
+D:\AiLab\Qwen25vl\OllamaTest\bin\Debug\net9.0\OllamaTest.exe
+D:\AiLab\Qwen25vl\OllamaTest\bin\Debug\net9.0\OllamaTest.deps.json
+D:\AiLab\Qwen25vl\OllamaTest\bin\Debug\net9.0\OllamaTest.runtimeconfig.json
+D:\AiLab\Qwen25vl\OllamaTest\bin\Debug\net9.0\OllamaTest.dll
+D:\AiLab\Qwen25vl\OllamaTest\bin\Debug\net9.0\OllamaTest.pdb
+D:\AiLab\Qwen25vl\OllamaTest\bin\Debug\net9.0\Newtonsoft.Json.dll
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.csproj.AssemblyReference.cache
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.GeneratedMSBuildEditorConfig.editorconfig
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.AssemblyInfoInputs.cache
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.AssemblyInfo.cs
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.csproj.CoreCompileInputs.cache
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.csproj.Up2Date
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.dll
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\refint\OllamaTest.dll
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.pdb
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.genruntimeconfig.cache
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\ref\OllamaTest.dll

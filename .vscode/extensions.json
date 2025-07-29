@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.vscode-dotnet-runtime", 
+        "formulahendry.dotnet-test-explorer",
+        "jchannon.csharpextensions",
+        "kreativ-software.csharpextensions",
+        "ms-vscode.vscode-json"
+    ],
+    "unwantedRecommendations": []
+}
