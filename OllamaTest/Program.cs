@@ -47,11 +47,11 @@ public class BlueButton
     public int CenterY { get; set; }
     public string Size { get; set; } = "";
     public string Shape { get; set; } = "";
-    
+
     // Screen coordinates (calculated from image coordinates + region offset)
     public int ScreenX { get; set; }
     public int ScreenY { get; set; }
-    
+
     public override string ToString() => $"'{Text}' at Image({CenterX}, {CenterY}) -> Screen({ScreenX}, {ScreenY}) - {Size} {Shape}";
 }
 
@@ -65,7 +65,7 @@ public class MainContentAnalysis
     public Rectangle MainContentRegion { get; set; }
     public float ConfidenceScore { get; set; }
     public List<string> ImportantElements { get; set; } = new List<string>();
-    
+
     public override string ToString() => $"{ContentType}: {Description} (Confidence: {ConfidenceScore:P0})";
 }
 
@@ -227,11 +227,51 @@ class Program
 
             if (response.IsSuccessStatusCode)
             {
-                var result = JsonConvert.DeserializeObject<OllamaResponse>(responseText);
-                
-                Console.WriteLine($"\n🎯 Main Content: {result?.Response?.Trim()}");
-
-                return new MainContentAnalysis { Description = result?.Response?.Trim() ?? "No response" };
+                try
+                {
+                    // Handle potential multiple JSON objects in response
+                    var lines = responseText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    OllamaResponse? result = null;
+                    
+                    foreach (var line in lines)
+                    {
+                        try
+                        {
+                            var tempResult = JsonConvert.DeserializeObject<OllamaResponse>(line);
+                            if (tempResult?.Done == true && !string.IsNullOrEmpty(tempResult.Response))
+                            {
+                                result = tempResult;
+                                break;
+                            }
+                            else if (tempResult != null && !string.IsNullOrEmpty(tempResult.Response))
+                            {
+                                result = tempResult;
+                            }
+                        }
+                        catch
+                        {
+                            // Skip malformed JSON lines
+                            continue;
+                        }
+                    }
+                    
+                    if (result != null && !string.IsNullOrEmpty(result.Response))
+                    {
+                        Console.WriteLine($"\n🎯 Main Content: {result.Response.Trim()}");
+                        return new MainContentAnalysis { Description = result.Response.Trim() };
+                    }
+                    else
+                    {
+                        Console.WriteLine($"\n❌ No valid response found in JSON");
+                        return new MainContentAnalysis { Description = "No valid response" };
+                    }
+                }
+                catch (Exception parseEx)
+                {
+                    Console.WriteLine($"\n❌ JSON parsing error: {parseEx.Message}");
+                    Console.WriteLine($"Raw response: {responseText.Substring(0, Math.Min(200, responseText.Length))}...");
+                    return new MainContentAnalysis { Description = "JSON parsing failed" };
+                }
             }
             else
             {
@@ -253,12 +293,12 @@ class Program
     {
         var analysis = new MainContentAnalysis();
         var lines = aiResponse.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        
+
         foreach (var line in lines)
         {
             var trimmedLine = line.Trim();
             var lowerLine = trimmedLine.ToLower();
-            
+
             if (lowerLine.StartsWith("type:"))
             {
                 analysis.ContentType = ExtractValueAfterColon(trimmedLine);
@@ -282,7 +322,7 @@ class Program
                 };
             }
         }
-        
+
         // Set defaults if not found
         if (string.IsNullOrEmpty(analysis.ContentType))
             analysis.ContentType = "Unknown";
@@ -290,7 +330,7 @@ class Program
             analysis.Description = "Quick content summary";
         if (analysis.ConfidenceScore == 0)
             analysis.ConfidenceScore = 0.5f;
-            
+
         return analysis;
     }
 
@@ -577,7 +617,7 @@ class Program
                     var btn = buttons[i];
                     Console.WriteLine($"   {i + 1}. {btn}");
                 }
-                
+
                 // Offer mouse interaction if we have valid screen coordinates
                 if (buttons.Any(b => b.ScreenX > 0 && b.ScreenY > 0))
                 {
@@ -595,7 +635,7 @@ class Program
             Console.WriteLine($"\n⚠️ Error parsing blue button info: {ex.Message}");
         }
     }
-    
+
     /// <summary>
     /// Offers mouse interaction with detected buttons
     /// </summary>
@@ -608,33 +648,33 @@ class Program
             Console.WriteLine("2. Click on a button");
             Console.WriteLine("3. Skip mouse interaction");
             Console.Write("Choose option (1-3): ");
-            
+
             var choice = Console.ReadLine()?.Trim();
-            
+
             if (choice == "1" || choice == "2")
             {
                 // Show available buttons with valid coordinates
                 var validButtons = buttons.Where(b => b.ScreenX > 0 && b.ScreenY > 0).ToList();
-                
+
                 if (validButtons.Count == 0)
                 {
                     Console.WriteLine("❌ No buttons with valid screen coordinates found.");
                     return;
                 }
-                
+
                 Console.WriteLine("\nAvailable buttons:");
                 for (int i = 0; i < validButtons.Count; i++)
                 {
                     var btn = validButtons[i];
                     Console.WriteLine($"{i + 1}. {btn.Text} -> Screen({btn.ScreenX}, {btn.ScreenY})");
                 }
-                
+
                 Console.Write($"Select button (1-{validButtons.Count}): ");
-                if (int.TryParse(Console.ReadLine(), out int buttonIndex) && 
+                if (int.TryParse(Console.ReadLine(), out int buttonIndex) &&
                     buttonIndex >= 1 && buttonIndex <= validButtons.Count)
                 {
                     var selectedButton = validButtons[buttonIndex - 1];
-                    
+
                     if (choice == "1")
                     {
                         // Just move mouse
@@ -647,13 +687,13 @@ class Program
                         // Move and click
                         Console.WriteLine($"🖱️  Clicking on '{selectedButton.Text}' at ({selectedButton.ScreenX}, {selectedButton.ScreenY})...");
                         Console.WriteLine("⚠️  CLICKING IN 3 SECONDS! Switch to target window if needed...");
-                        
+
                         for (int i = 3; i > 0; i--)
                         {
                             Console.WriteLine($"Clicking in {i}...");
                             Thread.Sleep(1000);
                         }
-                        
+
                         ClickAt(selectedButton.ScreenX, selectedButton.ScreenY);
                         Console.WriteLine("✅ Button clicked!");
                     }
@@ -1055,7 +1095,7 @@ class Program
             Console.Write("Enter your choice (1-4): ");
 
             var choice = Console.ReadLine()?.Trim();
-            
+
             switch (choice)
             {
                 case "1":
@@ -1108,7 +1148,7 @@ class Program
                     string base64Image = Convert.ToBase64String(ms.ToArray());
 
                     var analysis = await AnalyzeMainContent(base64Image, "full screen");
-                    
+
                     // Offer to focus on main content region
                     if (!analysis.MainContentRegion.IsEmpty)
                     {
@@ -1136,7 +1176,7 @@ class Program
         try
         {
             Console.WriteLine("🖱️  Select region for main content analysis...");
-            
+
             Rectangle selectedRegion = Rectangle.Empty;
             bool regionSelected = false;
 
@@ -1485,7 +1525,7 @@ class Program
             return point;
         return new Point(0, 0);
     }
-    
+
     /// <summary>
     /// Moves mouse to specified screen coordinates
     /// </summary>
@@ -1493,7 +1533,7 @@ class Program
     {
         return SetCursorPos(x, y);
     }
-    
+
     /// <summary>
     /// Performs a left mouse click at current position
     /// </summary>
@@ -1503,7 +1543,7 @@ class Program
         Thread.Sleep(50); // Small delay between down and up
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
     }
-    
+
     /// <summary>
     /// Moves mouse to coordinates and clicks
     /// </summary>
@@ -1513,7 +1553,7 @@ class Program
         Thread.Sleep(100); // Small delay to ensure mouse moved
         ClickMouse();
     }
-    
+
     /// <summary>
     /// Converts image coordinates to screen coordinates based on region offset
     /// </summary>
@@ -1536,13 +1576,13 @@ class Program
     // Additional Windows API for cursor position and mouse control
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point lpPoint);
-    
+
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
-    
+
     [DllImport("user32.dll")]
     private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, int dwExtraInfo);
-    
+
     // Mouse event constants
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
