@@ -15,3 +15,4 @@ D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\refint\OllamaTest.dll
 D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.pdb
 D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.genruntimeconfig.cache
 D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\ref\OllamaTest.dll
+D:\AiLab\Qwen25vl\OllamaTest\obj\Debug\net9.0\OllamaTest.sourcelink.json

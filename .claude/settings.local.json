@@ -4,7 +4,9 @@
       "Bash(mkdir:*)",
       "Bash(dotnet new:*)",
       "Bash(dotnet add:*)",
-      "Bash(dotnet build)"
+      "Bash(dotnet build)",
+      "Bash(git config:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

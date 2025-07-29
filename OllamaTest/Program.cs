@@ -56,6 +56,20 @@ public class BlueButton
 }
 
 /// <summary>
+/// Represents the main content analysis of an image
+/// </summary>
+public class MainContentAnalysis
+{
+    public string ContentType { get; set; } = "";
+    public string Description { get; set; } = "";
+    public Rectangle MainContentRegion { get; set; }
+    public float ConfidenceScore { get; set; }
+    public List<string> ImportantElements { get; set; } = new List<string>();
+    
+    public override string ToString() => $"{ContentType}: {Description} (Confidence: {ConfidenceScore:P0})";
+}
+
+/// <summary>
 /// Test application to verify communication with Ollama's Qwen2.5VL model
 /// This program tests three key functionalities:
 /// 1. Basic connection to Ollama service
@@ -180,6 +194,169 @@ class Program
         SaveRegionsToFile();
 
         Console.WriteLine($"✅ Region '{name}' saved successfully!");
+    }
+
+    /// <summary>
+    /// Analyzes the main content of an image to distinguish it from background/secondary elements
+    /// </summary>
+    static async Task<MainContentAnalysis> AnalyzeMainContent(string base64Image, string regionName)
+    {
+        try
+        {
+            Console.WriteLine("\n🎯 Analyzing main content...");
+
+            var request = new
+            {
+                model = "qwen2.5vl:3b",
+                prompt = $"Analyze this {regionName} image and identify the MAIN CONTENT. Focus on:\n\n1. PRIMARY SUBJECT: What is the most important element or focus of this image?\n2. CONTENT TYPE: Is this a document, webpage, application interface, photo, diagram, etc.?\n3. MAIN REGION: Where is the main content located? Provide approximate coordinates as (x, y, width, height)\n4. KEY ELEMENTS: List the 3-5 most important visual elements\n5. CONFIDENCE: How confident are you about identifying the main content? (High/Medium/Low)\n\nProvide your analysis in this format:\nCONTENT TYPE: [type]\nDESCRIPTION: [brief description of main content]\nMAIN REGION: (x, y, width, height)\nCONFIDENCE: [High/Medium/Low]\nKEY ELEMENTS:\n- Element 1\n- Element 2\n- Element 3",
+                images = new[] { base64Image },
+                stream = false
+            };
+
+            var json = JsonConvert.SerializeObject(request);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await httpClient.PostAsync(OLLAMA_URL, content);
+            var responseText = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = JsonConvert.DeserializeObject<OllamaResponse>(responseText);
+                var analysis = ParseMainContentAnalysis(result?.Response ?? "");
+                
+                Console.WriteLine($"\n🎯 Main Content Analysis Results:");
+                Console.WriteLine($"═══════════════════════════════════");
+                Console.WriteLine($"Content Type: {analysis.ContentType}");
+                Console.WriteLine($"Description: {analysis.Description}");
+                Console.WriteLine($"Main Region: {analysis.MainContentRegion}");
+                Console.WriteLine($"Confidence: {analysis.ConfidenceScore:P0}");
+                Console.WriteLine($"Key Elements:");
+                foreach (var element in analysis.ImportantElements)
+                {
+                    Console.WriteLine($"  • {element}");
+                }
+                Console.WriteLine($"═══════════════════════════════════");
+
+                return analysis;
+            }
+            else
+            {
+                Console.WriteLine($"❌ Main content analysis failed: {response.StatusCode}");
+                return new MainContentAnalysis { ContentType = "Unknown", Description = "Analysis failed" };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Main content analysis error: {ex.Message}");
+            return new MainContentAnalysis { ContentType = "Error", Description = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Parses the AI response to extract main content analysis information
+    /// </summary>
+    static MainContentAnalysis ParseMainContentAnalysis(string aiResponse)
+    {
+        var analysis = new MainContentAnalysis();
+        var lines = aiResponse.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        
+        bool inKeyElements = false;
+        
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            var lowerLine = trimmedLine.ToLower();
+            
+            if (lowerLine.StartsWith("content type:"))
+            {
+                analysis.ContentType = ExtractValueAfterColon(trimmedLine);
+                inKeyElements = false;
+            }
+            else if (lowerLine.StartsWith("description:"))
+            {
+                analysis.Description = ExtractValueAfterColon(trimmedLine);
+                inKeyElements = false;
+            }
+            else if (lowerLine.StartsWith("main region:"))
+            {
+                analysis.MainContentRegion = ParseRegionCoordinates(trimmedLine);
+                inKeyElements = false;
+            }
+            else if (lowerLine.StartsWith("confidence:"))
+            {
+                var confidenceText = ExtractValueAfterColon(trimmedLine).ToLower();
+                analysis.ConfidenceScore = confidenceText switch
+                {
+                    "high" => 0.9f,
+                    "medium" => 0.6f,
+                    "low" => 0.3f,
+                    _ when confidenceText.Contains("high") => 0.9f,
+                    _ when confidenceText.Contains("medium") => 0.6f,
+                    _ when confidenceText.Contains("low") => 0.3f,
+                    _ => 0.5f
+                };
+                inKeyElements = false;
+            }
+            else if (lowerLine.StartsWith("key elements:"))
+            {
+                inKeyElements = true;
+            }
+            else if (inKeyElements && (trimmedLine.StartsWith("-") || trimmedLine.StartsWith("•")))
+            {
+                var element = trimmedLine.Substring(1).Trim();
+                if (!string.IsNullOrEmpty(element))
+                {
+                    analysis.ImportantElements.Add(element);
+                }
+            }
+        }
+        
+        // Set defaults if not found
+        if (string.IsNullOrEmpty(analysis.ContentType))
+            analysis.ContentType = "Unknown";
+        if (string.IsNullOrEmpty(analysis.Description))
+            analysis.Description = "Content analysis not available";
+        if (analysis.ConfidenceScore == 0)
+            analysis.ConfidenceScore = 0.5f;
+            
+        return analysis;
+    }
+
+    /// <summary>
+    /// Extracts value after colon from a line
+    /// </summary>
+    static string ExtractValueAfterColon(string line)
+    {
+        var colonIndex = line.IndexOf(':');
+        if (colonIndex >= 0 && colonIndex < line.Length - 1)
+        {
+            return line.Substring(colonIndex + 1).Trim();
+        }
+        return "";
+    }
+
+    /// <summary>
+    /// Parses region coordinates from text like "(x, y, width, height)"
+    /// </summary>
+    static Rectangle ParseRegionCoordinates(string line)
+    {
+        try
+        {
+            var coordMatch = System.Text.RegularExpressions.Regex.Match(line, @"\((\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)");
+            if (coordMatch.Success)
+            {
+                int x = int.Parse(coordMatch.Groups[1].Value);
+                int y = int.Parse(coordMatch.Groups[2].Value);
+                int width = int.Parse(coordMatch.Groups[3].Value);
+                int height = int.Parse(coordMatch.Groups[4].Value);
+                return new Rectangle(x, y, width, height);
+            }
+        }
+        catch (Exception)
+        {
+            // Fall back to empty rectangle
+        }
+        return Rectangle.Empty;
     }
 
     /// <summary>
@@ -565,15 +742,17 @@ class Program
             if (savedRegions.Count > 0)
             {
                 Console.WriteLine($"3. 📋 Use saved region ({savedRegions.Count} available)");
-                Console.WriteLine("4. Load image file");
-                Console.WriteLine("5. Skip image test");
-                Console.Write("Enter your choice (1-5): ");
+                Console.WriteLine("4. 🎯 Main content analysis (analyze image focus)");
+                Console.WriteLine("5. Load image file");
+                Console.WriteLine("6. Skip image test");
+                Console.Write("Enter your choice (1-6): ");
             }
             else
             {
-                Console.WriteLine("3. Load image file");
-                Console.WriteLine("4. Skip image test");
-                Console.Write("Enter your choice (1-4): ");
+                Console.WriteLine("3. 🎯 Main content analysis (analyze image focus)");
+                Console.WriteLine("4. Load image file");
+                Console.WriteLine("5. Skip image test");
+                Console.Write("Enter your choice (1-5): ");
             }
 
             try
@@ -593,9 +772,12 @@ class Program
                             await TestSavedRegionSelection();
                             break;
                         case "4":
-                            await TestImageAnalysisWithFile(args);
+                            await TestMainContentAnalysis();
                             break;
                         case "5":
+                            await TestImageAnalysisWithFile(args);
+                            break;
+                        case "6":
                         default:
                             Console.WriteLine("Skipping image test.");
                             break;
@@ -612,9 +794,12 @@ class Program
                             await TestInteractiveRegionSelection();
                             break;
                         case "3":
-                            await TestImageAnalysisWithFile(args);
+                            await TestMainContentAnalysis();
                             break;
                         case "4":
+                            await TestImageAnalysisWithFile(args);
+                            break;
+                        case "5":
                         default:
                             Console.WriteLine("Skipping image test.");
                             break;
@@ -870,6 +1055,204 @@ class Program
         {
             graphics.CopyFromScreen(x, y, 0, 0, new Size(width, height));
             return new Bitmap(screenBitmap);
+        }
+    }
+
+    /// <summary>
+    /// Tests main content analysis functionality
+    /// </summary>
+    static async Task TestMainContentAnalysis()
+    {
+        try
+        {
+            Console.WriteLine("🎯 Main Content Analysis");
+            Console.WriteLine("═══════════════════════════");
+            Console.WriteLine("This feature analyzes images to identify the main content and distinguish it from background elements.");
+            Console.WriteLine();
+            Console.WriteLine("Choose content analysis mode:");
+            Console.WriteLine("1. Analyze full screen screenshot");
+            Console.WriteLine("2. Analyze selected region");
+            Console.WriteLine("3. Analyze image file");
+            Console.WriteLine("4. Cancel");
+            Console.Write("Enter your choice (1-4): ");
+
+            var choice = Console.ReadLine()?.Trim();
+            
+            switch (choice)
+            {
+                case "1":
+                    await AnalyzeFullScreenMainContent();
+                    break;
+                case "2":
+                    await AnalyzeRegionMainContent();
+                    break;
+                case "3":
+                    await AnalyzeFileMainContent();
+                    break;
+                case "4":
+                default:
+                    Console.WriteLine("Main content analysis cancelled.");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Main content analysis error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Analyzes main content of full screen
+    /// </summary>
+    static async Task AnalyzeFullScreenMainContent()
+    {
+        try
+        {
+            Console.WriteLine("Capturing full screen in 3 seconds...");
+            Console.WriteLine("Switch to the window you want to analyze!");
+
+            for (int i = 3; i > 0; i--)
+            {
+                Console.WriteLine($"Capturing in {i}...");
+                await Task.Delay(1000);
+            }
+
+            Console.WriteLine("📸 Taking screenshot...");
+
+            using (Bitmap screenshot = CaptureScreen())
+            {
+                string tempPath = Path.Combine(Path.GetTempPath(), $"main_content_analysis_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+                screenshot.Save(tempPath, ImageFormat.Png);
+
+                using (var ms = new MemoryStream())
+                {
+                    screenshot.Save(ms, ImageFormat.Png);
+                    string base64Image = Convert.ToBase64String(ms.ToArray());
+
+                    var analysis = await AnalyzeMainContent(base64Image, "full screen");
+                    
+                    // Offer to focus on main content region
+                    if (!analysis.MainContentRegion.IsEmpty)
+                    {
+                        Console.Write("\n🔍 Would you like to focus on the main content region for detailed analysis? (y/n): ");
+                        var focusChoice = Console.ReadLine()?.ToLower();
+                        if (focusChoice == "y" || focusChoice == "yes")
+                        {
+                            await CaptureAndAnalyzeMainContentRegion(analysis.MainContentRegion, "main content");
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Full screen main content analysis error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Analyzes main content of selected region
+    /// </summary>
+    static async Task AnalyzeRegionMainContent()
+    {
+        try
+        {
+            Console.WriteLine("🖱️  Select region for main content analysis...");
+            
+            Rectangle selectedRegion = Rectangle.Empty;
+            bool regionSelected = false;
+
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            var thread = new Thread(() =>
+            {
+                using (var selector = new RegionSelector())
+                {
+                    var result = selector.ShowDialog();
+                    if (result == DialogResult.OK)
+                    {
+                        selectedRegion = selector.SelectedRegion;
+                        regionSelected = true;
+                    }
+                }
+            });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            if (regionSelected && !selectedRegion.IsEmpty)
+            {
+                await CaptureAndAnalyzeMainContentRegion(selectedRegion, "selected region");
+            }
+            else
+            {
+                Console.WriteLine("❌ No region selected.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Region main content analysis error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Analyzes main content of image file
+    /// </summary>
+    static async Task AnalyzeFileMainContent()
+    {
+        try
+        {
+            Console.WriteLine("Enter the path to an image file:");
+            var imagePath = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath))
+            {
+                Console.WriteLine("❌ Invalid or non-existent file path.");
+                return;
+            }
+
+            Console.WriteLine($"📁 Loading image: {imagePath}");
+            byte[] imageBytes = await File.ReadAllBytesAsync(imagePath);
+            string base64Image = Convert.ToBase64String(imageBytes);
+
+            await AnalyzeMainContent(base64Image, Path.GetFileName(imagePath));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ File main content analysis error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Captures and analyzes main content of a specific region
+    /// </summary>
+    static async Task CaptureAndAnalyzeMainContentRegion(Rectangle region, string regionName)
+    {
+        try
+        {
+            Console.WriteLine($"📸 Capturing {regionName} for main content analysis...");
+
+            using (Bitmap regionScreenshot = CaptureRegion(region.X, region.Y, region.Width, region.Height))
+            {
+                string tempPath = Path.Combine(Path.GetTempPath(),
+                    $"main_content_{regionName}_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+                regionScreenshot.Save(tempPath, ImageFormat.Png);
+
+                using (var ms = new MemoryStream())
+                {
+                    regionScreenshot.Save(ms, ImageFormat.Png);
+                    string base64Image = Convert.ToBase64String(ms.ToArray());
+
+                    await AnalyzeMainContent(base64Image, regionName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Region main content analysis error: {ex.Message}");
         }
     }
 
