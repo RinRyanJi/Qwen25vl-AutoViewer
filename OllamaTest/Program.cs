@@ -208,7 +208,7 @@ class Program
             var request = new
             {
                 model = "qwen2.5vl:3b",
-                prompt = $"Analyze this {regionName} image and identify the MAIN CONTENT. Focus on:\n\n1. PRIMARY SUBJECT: What is the most important element or focus of this image?\n2. CONTENT TYPE: Is this a document, webpage, application interface, photo, diagram, etc.?\n3. MAIN REGION: Where is the main content located? Provide approximate coordinates as (x, y, width, height)\n4. KEY ELEMENTS: List the 3-5 most important visual elements\n5. CONFIDENCE: How confident are you about identifying the main content? (High/Medium/Low)\n\nProvide your analysis in this format:\nCONTENT TYPE: [type]\nDESCRIPTION: [brief description of main content]\nMAIN REGION: (x, y, width, height)\nCONFIDENCE: [High/Medium/Low]\nKEY ELEMENTS:\n- Element 1\n- Element 2\n- Element 3",
+                prompt = $"Look at this {regionName} image. What is the main thing you see?\n\nAnswer quickly in this format:\nTYPE: [webpage/app/document/photo]\nMAIN CONTENT: [what is the most important thing]\nCONFIDENCE: [High/Medium/Low]",
                 images = new[] { base64Image },
                 stream = false
             };
@@ -227,14 +227,8 @@ class Program
                 Console.WriteLine($"\n🎯 Main Content Analysis Results:");
                 Console.WriteLine($"═══════════════════════════════════");
                 Console.WriteLine($"Content Type: {analysis.ContentType}");
-                Console.WriteLine($"Description: {analysis.Description}");
-                Console.WriteLine($"Main Region: {analysis.MainContentRegion}");
+                Console.WriteLine($"Main Content: {analysis.Description}");
                 Console.WriteLine($"Confidence: {analysis.ConfidenceScore:P0}");
-                Console.WriteLine($"Key Elements:");
-                foreach (var element in analysis.ImportantElements)
-                {
-                    Console.WriteLine($"  • {element}");
-                }
                 Console.WriteLine($"═══════════════════════════════════");
 
                 return analysis;
@@ -260,27 +254,18 @@ class Program
         var analysis = new MainContentAnalysis();
         var lines = aiResponse.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         
-        bool inKeyElements = false;
-        
         foreach (var line in lines)
         {
             var trimmedLine = line.Trim();
             var lowerLine = trimmedLine.ToLower();
             
-            if (lowerLine.StartsWith("content type:"))
+            if (lowerLine.StartsWith("type:"))
             {
                 analysis.ContentType = ExtractValueAfterColon(trimmedLine);
-                inKeyElements = false;
             }
-            else if (lowerLine.StartsWith("description:"))
+            else if (lowerLine.StartsWith("main content:"))
             {
                 analysis.Description = ExtractValueAfterColon(trimmedLine);
-                inKeyElements = false;
-            }
-            else if (lowerLine.StartsWith("main region:"))
-            {
-                analysis.MainContentRegion = ParseRegionCoordinates(trimmedLine);
-                inKeyElements = false;
             }
             else if (lowerLine.StartsWith("confidence:"))
             {
@@ -295,19 +280,6 @@ class Program
                     _ when confidenceText.Contains("low") => 0.3f,
                     _ => 0.5f
                 };
-                inKeyElements = false;
-            }
-            else if (lowerLine.StartsWith("key elements:"))
-            {
-                inKeyElements = true;
-            }
-            else if (inKeyElements && (trimmedLine.StartsWith("-") || trimmedLine.StartsWith("•")))
-            {
-                var element = trimmedLine.Substring(1).Trim();
-                if (!string.IsNullOrEmpty(element))
-                {
-                    analysis.ImportantElements.Add(element);
-                }
             }
         }
         
@@ -315,7 +287,7 @@ class Program
         if (string.IsNullOrEmpty(analysis.ContentType))
             analysis.ContentType = "Unknown";
         if (string.IsNullOrEmpty(analysis.Description))
-            analysis.Description = "Content analysis not available";
+            analysis.Description = "Quick content summary";
         if (analysis.ConfidenceScore == 0)
             analysis.ConfidenceScore = 0.5f;
             
@@ -944,7 +916,7 @@ class Program
                     var request = new
                     {
                         model = "qwen2.5vl:3b",
-                        prompt = "Find blue buttons.Look for the Buttons with blue background\n\nIMPORTANT: button by using this exact format:\n\nBUTTON 1:\nText: \"button text here\"\nPosition: (x, y)",
+                        prompt = "Find blue buttons or clickable blue elements.\n\nFor each blue button you find, answer:\nBUTTON 1:\nText: \"button text\"\nPosition: (x, y)\n\nBUTTON 2:\nText: \"button text\"\nPosition: (x, y)",
                         images = new[] { base64Image },
                         stream = false
                     };
@@ -1421,7 +1393,7 @@ class Program
                     var request = new
                     {
                         model = "qwen2.5vl:3b",
-                        prompt = "Find blue buttons. Look for the Buttons with blue background\n\nIMPORTANT: button by using this exact format:\n\nBUTTON 1:\nText: \"button text here\"\nPosition: (x, y)",
+                        prompt = "Find blue buttons or clickable blue elements.\n\nFor each blue button you find, answer:\nBUTTON 1:\nText: \"button text\"\nPosition: (x, y)\n\nBUTTON 2:\nText: \"button text\"\nPosition: (x, y)",
                         images = new[] { base64Image },
                         stream = false
                     };
@@ -1645,7 +1617,7 @@ class Program
             var request = new
             {
                 model = "qwen2.5vl:3b",                                               // Vision model name (no hyphen)
-                prompt = "Find blue buttons. Look for the Buttons with blue background\n\nIMPORTANT: button by using this exact format:\n\nBUTTON 1:\nText: \"button text here\"\nPosition: (x, y)",
+                prompt = "Find blue buttons or clickable blue elements.\n\nFor each blue button you find, answer:\nBUTTON 1:\nText: \"button text\"\nPosition: (x, y)\n\nBUTTON 2:\nText: \"button text\"\nPosition: (x, y)",
                 images = new[] { base64Image },                                        // Array of base64 encoded images
                 stream = false                                                         // Complete response mode
             };
